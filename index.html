@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>茁思科技 - 履歷管理系統 (雲端版)</title>
+    <title>茁思科技 - 履歷管理系統 (單機版)</title>
     <!-- 引入 Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 引入 Lucide Icons -->
@@ -46,7 +46,7 @@
                 padding: 0;
             }
             /* 隱藏非列印元素 */
-            .no-print, nav, button, .tabs-nav, #cloud-status, #preview-warning {
+            .no-print, nav, button, .tabs-nav, #status-bar, #preview-warning {
                 display: none !important;
             }
             /* 確保背景顏色被列印 */
@@ -81,11 +81,13 @@
             <div class="flex flex-col md:flex-row justify-between items-center h-auto md:h-16 py-2 md:py-0 gap-3 md:gap-0">
                 <div class="flex items-center gap-2">
                     <div class="bg-blue-600 text-white p-2 rounded-lg">
-                        <i data-lucide="cloud" width="24" height="24"></i>
+                        <i data-lucide="monitor" width="24" height="24"></i>
                     </div>
-                    <div>
+                    <div class="flex flex-col">
                         <span class="font-bold text-xl text-gray-800">履歷管理系統</span>
-                        <span id="cloud-status" class="text-xs ml-2 px-2 py-0.5 rounded-full bg-gray-200 text-gray-500 animate-pulse">連線中...</span>
+                        <span id="status-bar" class="text-xs text-gray-500 flex items-center gap-1">
+                            <span class="w-2 h-2 rounded-full bg-green-500"></span> 本機運作中
+                        </span>
                     </div>
                 </div>
                 <div class="flex space-x-2">
@@ -93,11 +95,20 @@
                         <i data-lucide="user" width="18"></i> 編輯資料
                     </button>
                     <button onclick="switchTab('projects')" id="btn-projects" class="px-4 py-2 rounded-md flex items-center gap-2 transition-colors hover:bg-gray-100 text-gray-600">
-                        <i data-lucide="layout-list" width="18"></i> 專案總表管理
+                        <i data-lucide="layout-list" width="18"></i> 專案總表
                     </button>
                     <button onclick="switchTab('preview')" id="btn-preview" class="px-4 py-2 rounded-md flex items-center gap-2 transition-colors hover:bg-gray-100 text-gray-600">
-                        <i data-lucide="file-text" width="18"></i> 預覽與列印
+                        <i data-lucide="file-text" width="18"></i> 預覽列印
                     </button>
+                    <!-- 資料管理按鈕 (New) -->
+                    <div class="border-l border-gray-300 mx-2"></div>
+                    <button onclick="exportData()" class="px-3 py-2 rounded-md flex items-center gap-1 transition-colors hover:bg-gray-100 text-gray-600 text-sm" title="匯出資料給同事">
+                        <i data-lucide="download" width="16"></i> 備份
+                    </button>
+                    <button onclick="document.getElementById('import-file').click()" class="px-3 py-2 rounded-md flex items-center gap-1 transition-colors hover:bg-gray-100 text-gray-600 text-sm" title="匯入同事的資料">
+                        <i data-lucide="upload" width="16"></i> 匯入
+                    </button>
+                    <input type="file" id="import-file" class="hidden" accept=".json" onchange="importData(this)">
                 </div>
             </div>
         </div>
@@ -117,18 +128,13 @@
                         <span>快速載入人員：</span>
                     </div>
                     <select id="employee-select" onchange="switchEmployee(this.value)" class="flex-1 w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white shadow-sm cursor-pointer hover:border-blue-400 transition-colors">
-                        <option value="">-- 資料載入中 --</option>
+                        <option value="">-- 請選擇人員 --</option>
                         <!-- JS 動態生成人員選項 -->
                     </select>
                 </div>
 
                 <!-- 基本資料 -->
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden relative">
-                    <!-- 儲存指示器 -->
-                    <div id="save-indicator" class="absolute top-4 right-4 text-xs font-bold text-green-600 opacity-0 transition-opacity flex items-center gap-1">
-                        <i data-lucide="check" width="12"></i> 已儲存
-                    </div>
-
                     <div class="bg-blue-50 px-6 py-4 border-b border-blue-100 flex items-center gap-2">
                         <i data-lucide="user" class="text-blue-600" width="20"></i>
                         <h2 class="font-semibold text-blue-900">基本資料編輯</h2>
@@ -157,7 +163,7 @@
                         <!-- 現職可編輯 -->
                         <div class="md:col-span-2 space-y-2">
                             <label class="text-sm font-medium text-gray-700">現職 (表格內)</label>
-                            <input type="text" id="input-currentJob" oninput="debounceUpdate('currentJob', this.value)" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                            <input type="text" id="input-currentJob" oninput="updateCurrentEmployee('currentJob', this.value)" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white">
                         </div>
                     </div>
                 </div>
@@ -194,7 +200,7 @@
                                 <option value="">-- 請選擇專長組合 --</option>
                                 <!-- JS Populated -->
                             </select>
-                            <textarea id="input-skills" rows="3" oninput="debounceUpdate('skills', this.value)" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none placeholder-gray-400" placeholder="選擇上方專長後，內容會出現在此，亦可手動編輯"></textarea>
+                            <textarea id="input-skills" rows="3" oninput="updateCurrentEmployee('skills', this.value)" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none placeholder-gray-400" placeholder="選擇上方專長後，內容會出現在此，亦可手動編輯"></textarea>
                         </div>
                     </div>
                 </div>
@@ -215,7 +221,7 @@
                         </button>
                     </div>
                     <div id="project-selection-list" class="p-4 flex-1 overflow-y-auto space-y-2">
-                        <div class="text-center text-gray-400 text-sm mt-4">資料載入中...</div>
+                        <div class="text-center text-gray-400 text-sm mt-4">請先選擇左側人員</div>
                     </div>
                     <div class="p-4 bg-gray-50 border-t border-gray-200 text-xs text-gray-500 text-center">
                         已選擇 <span id="selected-count">0</span> 個專案
@@ -268,7 +274,7 @@
                             </tr>
                         </thead>
                         <tbody id="master-project-list" class="divide-y divide-gray-100">
-                           <tr><td colspan="4" class="p-4 text-center text-gray-400">載入中...</td></tr>
+                           <!-- Projects go here -->
                         </tbody>
                     </table>
                 </div>
@@ -378,9 +384,9 @@
 
     </main>
 
-    <!-- Initial Data for Database Seeding (Static) -->
+    <!-- Initial Data Logic -->
     <script>
-        // Make these available globally for seeding
+        // Default Data (Fallback) - Attached to Window for Global Access
         window.INITIAL_EMPLOYEES_DATA = [
             { id: 'p1', name: '陳慶宇', gender: '男', currentJob: '茁思科技業務組長', school: '國立勤益科技大學', department: '企業管理系', degree: '學士', experience: '茁思科技股份有限公司業務專員、計畫經理（2023-迄今）\n欣宸幼兒運動工作室體能高中職教育工作者（2020-2022）', defaultTitle: '客戶服務組長', skills: '專案管理、規劃執行、專案活動執行、Excel、PowerPoint、Word', selectedProjectIds: [1, 2] },
             { id: 'p2', name: '林怡君', gender: '女', currentJob: '茁思科技業務協理', school: '國立臺北大學', department: '企業管理學系', degree: '碩士', experience: '茁思科技業務協理(2018-迄今)\n茁思科技股份有限公司 計畫經理(2016-2018)\n馬來西亞商思想科技有限公司臺灣分公司 業務經理(2013-2016)\n玉山銀行顧客服務專員(2012-2013)\n麗庭莊園婚宴企劃(2010-2012)\nGoogle 企業解決方案講師', defaultTitle: '計畫主持人', skills: '計畫管理、Social Analytics、輿情分析與應用、Google Maps Business View、Google Apps for Work、Google Place、G Sutie、Visio、Excel、PowerPoint、Word、Page、Adobe', selectedProjectIds: [] },
@@ -448,149 +454,114 @@
             "互動企劃師",
             "UIUX 設計師"
         ];
-    </script>
 
-    <!-- JavaScript & Firebase Logic -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch, getDocs, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        // Global State Variables (Client Side)
-        let employees = []; // Synced from DB
-        let projects = [];  // Synced from DB
+        // --- JavaScript Logic (No Firebase) ---
+        let employees = [];
+        let projects = [];
         let currentEmpId = '';
-        let currentUser = null;
-        let db = null;
-        let appId = 'default-app-id'; // Will be overwritten by environment
-        let debounceTimer = null;
+        const STORAGE_KEY = 'RESUME_SYSTEM_DATA_V1';
 
-        // Sorting Helper
-        function sortProjectsByDate(a, b) {
-            const getVal = (dateStr) => {
-                if (!dateStr) return 0;
-                // Remove non-date chars if any, though data seems clean
-                const parts = dateStr.trim().split('/');
-                const year = parseInt(parts[0], 10) || 0;
-                const month = parseInt(parts[1], 10) || 0;
-                return year * 100 + month;
-            };
+        // 1. App Init
+        function initApp() {
+            loadData();
+            initSelectOptions();
+            lucide.createIcons();
             
-            return getVal(b.endDate) - getVal(a.endDate);
+            // Switch to default edit tab
+            switchTab('edit');
         }
 
-        // --- Firebase Initialization ---
-        function initFirebase() {
-            const firebaseConfig = JSON.parse(__firebase_config || '{}');
-            appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-            
-            const app = initializeApp(firebaseConfig);
-            const auth = getAuth(app);
-            db = getFirestore(app);
-
-            // Auth Flow
-            const initAuth = async () => {
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
+        // 2. Data Management (Local Storage)
+        function saveData() {
+            const data = {
+                employees: employees,
+                projects: projects
             };
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+            // Visual feedback handled by individual actions or we can add a global one
+        }
 
-            initAuth();
-
-            onAuthStateChanged(auth, (user) => {
-                currentUser = user;
-                if (user) {
-                    updateStatus('已連線', 'bg-green-100 text-green-700');
-                    setupListeners();
-                } else {
-                    updateStatus('離線', 'bg-red-100 text-red-700');
+        function loadData() {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    employees = parsed.employees || window.INITIAL_EMPLOYEES_DATA;
+                    projects = parsed.projects || window.INITIAL_PROJECTS_DATA;
+                } catch (e) {
+                    console.error("Data parse error", e);
+                    resetData();
                 }
+            } else {
+                resetData();
+            }
+            sortProjects();
+            renderMasterProjectList();
+        }
+
+        function resetData() {
+            employees = JSON.parse(JSON.stringify(window.INITIAL_EMPLOYEES_DATA));
+            projects = JSON.parse(JSON.stringify(window.INITIAL_PROJECTS_DATA));
+            saveData();
+        }
+
+        function sortProjects() {
+            // Sort by Date Descending
+            projects.sort((a, b) => {
+                const getVal = (dateStr) => {
+                    if (!dateStr) return 0;
+                    const parts = dateStr.trim().split('/');
+                    const year = parseInt(parts[0], 10) || 0;
+                    const month = parseInt(parts[1], 10) || 0;
+                    return year * 100 + month;
+                };
+                return getVal(b.endDate) - getVal(a.endDate);
             });
         }
 
-        function updateStatus(text, classes) {
-            const el = document.getElementById('cloud-status');
-            el.textContent = text;
-            el.className = `text-xs ml-2 px-2 py-0.5 rounded-full ${classes}`;
-        }
+        // --- Export / Import ---
+        window.exportData = () => {
+            const data = { employees, projects };
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `resume_data_${new Date().toISOString().slice(0,10)}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        };
 
-        // --- Firestore Listeners ---
-        function setupListeners() {
-            if (!currentUser) return;
-
-            // 1. Projects Listener (Public Data)
-            // Using RULE 1: /artifacts/{appId}/public/data/projects
-            const projectsCol = collection(db, 'artifacts', appId, 'public', 'data', 'projects');
-            onSnapshot(projectsCol, (snapshot) => {
-                if (snapshot.empty && projects.length === 0) {
-                     // Initial Seed if empty
-                     seedProjects(projectsCol);
-                } else {
-                    projects = snapshot.docs.map(d => d.data());
-                    // Sort by Date Descending
-                    projects.sort(sortProjectsByDate);
-                    window.projects = projects; // Expose for non-module functions
-                    renderMasterProjectList();
-                    // If we are on edit screen, update list
-                    if (currentEmpId) renderProjectSelectionList(); 
-                }
-            }, (error) => console.error("Projects sync error:", error));
-
-            // 2. Employees Listener (Public Data for Sharing)
-            const employeesCol = collection(db, 'artifacts', appId, 'public', 'data', 'employees');
-            onSnapshot(employeesCol, (snapshot) => {
-                if (snapshot.empty && employees.length === 0) {
-                    seedEmployees(employeesCol);
-                } else {
-                    employees = snapshot.docs.map(d => d.data());
-                    // Sort employees by ID p1, p2...
-                    employees.sort((a, b) => parseInt(a.id.replace('p','')) - parseInt(b.id.replace('p','')));
-                    window.employees = employees; // Expose
-                    
-                    // Update Dropdown options
-                    updateEmployeeSelect();
-                    
-                    // If currently editing someone, refresh their data (careful not to break typing)
-                    if (currentEmpId) {
-                        const latestData = employees.find(e => e.id === currentEmpId);
-                        if (latestData) {
-                            if(document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
-                                loadEmployeeDataToForm(latestData);
-                            }
-                            // ALWAYS update the selection list (checkboxes don't interfere with typing)
-                            renderProjectSelectionList();
+        window.importData = (input) => {
+            const file = input.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const parsed = JSON.parse(e.target.result);
+                    if (parsed.employees && parsed.projects) {
+                        if(confirm('確定要匯入此資料檔嗎？這將會覆蓋您目前的瀏覽器資料。')) {
+                            employees = parsed.employees;
+                            projects = parsed.projects;
+                            saveData();
+                            alert('匯入成功！');
+                            location.reload(); // Refresh to ensure UI consistency
                         }
+                    } else {
+                        alert('檔案格式錯誤');
                     }
+                } catch (err) {
+                    alert('讀取失敗：' + err.message);
                 }
-            }, (error) => console.error("Employees sync error:", error));
-        }
+            };
+            reader.readAsText(file);
+            // Reset input
+            input.value = ''; 
+        };
 
-        // --- Seeding Data ---
-        async function seedProjects(colRef) {
-            const batch = writeBatch(db);
-            window.INITIAL_PROJECTS_DATA.forEach(p => {
-                // Use ID as doc ID for simplicity
-                const docRef = doc(colRef, p.id.toString());
-                batch.set(docRef, p);
-            });
-            await batch.commit();
-            console.log("Seeded Projects");
-        }
-
-        async function seedEmployees(colRef) {
-            const batch = writeBatch(db);
-            window.INITIAL_EMPLOYEES_DATA.forEach(e => {
-                const docRef = doc(colRef, e.id);
-                batch.set(docRef, e);
-            });
-            await batch.commit();
-            console.log("Seeded Employees");
-        }
-
-        // --- Business Logic exposed to Window ---
-        
+        // --- UI Interactions ---
         window.switchEmployee = (empId) => {
             currentEmpId = empId;
             if(!empId) return;
@@ -612,26 +583,13 @@
             document.getElementById('selected-count').textContent = (emp.selectedProjectIds || []).length;
         };
 
-        // --- Update Logic (Writes to DB) ---
-
-        // Generic update function for employee fields
-        window.updateCurrentEmployee = async (field, value) => {
-            if (!currentEmpId || !currentUser) return;
-            
-            showSaving();
-            const empDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'employees', currentEmpId);
-            await updateDoc(empDocRef, {
-                [field]: value
-            });
-            showSaved();
-        };
-
-        // Debounced update for text inputs
-        window.debounceUpdate = (field, value) => {
-            if (debounceTimer) clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(() => {
-                updateCurrentEmployee(field, value);
-            }, 500); // 500ms delay
+        window.updateCurrentEmployee = (field, value) => {
+            if (!currentEmpId) return;
+            const emp = employees.find(e => e.id === currentEmpId);
+            if(emp) {
+                emp[field] = value;
+                saveData();
+            }
         };
 
         window.updateSkillsFromSelect = (value) => {
@@ -641,7 +599,7 @@
             }
         };
 
-        window.toggleProjectSelection = async (projectId, checkbox) => {
+        window.toggleProjectSelection = (projectId, checkbox) => {
             if (!currentEmpId) return;
             const emp = employees.find(e => e.id === currentEmpId);
             if (!emp) return;
@@ -652,8 +610,11 @@
             } else {
                 newIds = newIds.filter(id => id !== projectId);
             }
-
-            // Optimistic UI update
+            
+            emp.selectedProjectIds = newIds;
+            saveData();
+            
+            // UI Update
             const label = checkbox.closest('label');
             if (checkbox.checked) {
                 label.classList.remove('hover:bg-gray-50', 'border-gray-100');
@@ -662,14 +623,10 @@
                 label.classList.remove('bg-green-50', 'border-green-200');
                 label.classList.add('hover:bg-gray-50', 'border-gray-100');
             }
-
-            showSaving();
-            const empDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'employees', currentEmpId);
-            await updateDoc(empDocRef, { selectedProjectIds: newIds });
-            showSaved();
+            document.getElementById('selected-count').textContent = newIds.length;
         };
 
-        window.toggleSelectAll = async () => {
+        window.toggleSelectAll = () => {
              if (!currentEmpId) return;
              const emp = employees.find(e => e.id === currentEmpId);
              if (!emp) return;
@@ -678,23 +635,17 @@
              const currentIds = emp.selectedProjectIds || [];
              const isAllSelected = allIds.every(id => currentIds.includes(id));
              
-             let newIds = [];
-             if (!isAllSelected) {
-                 newIds = [...allIds];
+             if (isAllSelected) {
+                 emp.selectedProjectIds = [];
+             } else {
+                 emp.selectedProjectIds = [...allIds];
              }
-
-             // OPTIMISTIC UPDATE
-             emp.selectedProjectIds = newIds;
-             renderProjectSelectionList(); // Re-render the list immediately
-
-             showSaving();
-             const empDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'employees', currentEmpId);
-             await updateDoc(empDocRef, { selectedProjectIds: newIds });
-             showSaved();
+             saveData();
+             renderProjectSelectionList(); // Re-render to show checks
         };
 
-        // --- Project Management (Writes to DB) ---
-        window.addNewProject = async () => {
+        // --- Project Management ---
+        window.addNewProject = () => {
             const name = document.getElementById('new-project-name').value;
             const client = document.getElementById('new-project-client').value;
             const date = document.getElementById('new-project-date').value;
@@ -702,44 +653,61 @@
             if (!name) { alert('請輸入專案名稱'); return; }
 
             const newId = projects.length > 0 ? Math.max(...projects.map(p => p.id)) + 1 : 1;
-
-            const newProject = {
-                id: newId,
-                name: name,
-                client: client,
-                endDate: date
-            };
-
-            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'projects', newId.toString());
-            await setDoc(docRef, newProject);
-
-            // Clear inputs
+            projects.unshift({ id: newId, name, client, endDate: date }); // Add to top since we sort anyway
+            saveData();
+            
+            // Clear
             document.getElementById('new-project-name').value = '';
             document.getElementById('new-project-client').value = '';
             document.getElementById('new-project-date').value = '';
+            
+            sortProjects();
+            renderMasterProjectList();
+            if(currentEmpId) renderProjectSelectionList();
         };
 
-        window.deleteProject = async (id) => {
-            if (confirm('確定要從系統中刪除此專案嗎？這將會從雲端資料庫永久刪除。')) {
-                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'projects', id.toString());
-                await deleteDoc(docRef);
+        window.deleteProject = (id) => {
+            if (confirm('確定要刪除此專案嗎？')) {
+                projects = projects.filter(p => p.id !== id);
+                saveData();
+                renderMasterProjectList();
+                if(currentEmpId) renderProjectSelectionList();
             }
         };
 
-        // --- Rendering Helpers ---
-        function updateEmployeeSelect() {
-            const select = document.getElementById('employee-select');
-            const currentVal = select.value;
-            select.innerHTML = '<option value="">-- 請選擇人員 --</option>';
+        // --- Rendering ---
+        function initSelectOptions() {
+            // Employees Dropdown
+            const empSelect = document.getElementById('employee-select');
+            empSelect.innerHTML = '<option value="">-- 請選擇人員 --</option>';
             employees.forEach(emp => {
                 const opt = document.createElement('option');
                 opt.value = emp.id;
                 opt.textContent = `${emp.name} (${emp.currentJob})`;
-                select.appendChild(opt);
+                empSelect.appendChild(opt);
             });
-            if (currentVal && employees.find(e => e.id === currentVal)) {
-                select.value = currentVal;
+
+            // Titles
+            const titleSelect = document.getElementById('input-defaultTitle');
+            if (window.jobTitles) {
+                window.jobTitles.forEach(title => {
+                    const opt = document.createElement('option');
+                    opt.value = title;
+                    opt.textContent = title;
+                    titleSelect.appendChild(opt);
+                });
             }
+
+            // Skills
+            const skillSelect = document.getElementById('skills-select');
+            employees.forEach(emp => {
+                const opt = document.createElement('option');
+                opt.value = emp.skills;
+                let shortSkill = emp.skills.substring(0, 20) + (emp.skills.length > 20 ? '...' : '');
+                if (!shortSkill) shortSkill = "(空白)";
+                opt.textContent = `${emp.name} 的專長組合: ${shortSkill}`;
+                skillSelect.appendChild(opt);
+            });
         }
 
         window.renderProjectSelectionList = () => {
@@ -753,7 +721,6 @@
 
             const emp = employees.find(e => e.id === currentEmpId);
             const selectedIds = emp ? (emp.selectedProjectIds || []) : [];
-
             document.getElementById('selected-count').textContent = selectedIds.length;
 
             projects.forEach(project => {
@@ -778,9 +745,7 @@
 
         window.renderMasterProjectList = () => {
             const container = document.getElementById('master-project-list');
-            document.getElementById('total-projects-count').textContent = projects.length;
             container.innerHTML = '';
-
             projects.forEach(project => {
                 const tr = document.createElement('tr');
                 tr.className = 'hover:bg-gray-50';
@@ -799,64 +764,7 @@
             lucide.createIcons();
         };
 
-        // --- UI Utils ---
-        function showSaving() {
-            const ind = document.getElementById('save-indicator');
-            ind.innerHTML = '<i data-lucide="loader-2" class="animate-spin" width="12"></i> 儲存中...';
-            ind.className = 'absolute top-4 right-4 text-xs font-bold text-blue-600 opacity-100 transition-opacity flex items-center gap-1';
-            lucide.createIcons();
-        }
-
-        function showSaved() {
-            setTimeout(() => {
-                const ind = document.getElementById('save-indicator');
-                ind.innerHTML = '<i data-lucide="check" width="12"></i> 已儲存';
-                ind.className = 'absolute top-4 right-4 text-xs font-bold text-green-600 opacity-100 transition-opacity flex items-center gap-1';
-                lucide.createIcons();
-                setTimeout(() => {
-                    ind.classList.add('opacity-0');
-                    ind.classList.remove('opacity-100');
-                }, 2000);
-            }, 500);
-        }
-
-        // --- 8. 初始化下拉選單 (Static Options) ---
-        function initSelectOptions() {
-            // Titles - Using window.jobTitles
-            const titleSelect = document.getElementById('input-defaultTitle');
-            if (window.jobTitles) {
-                window.jobTitles.forEach(title => {
-                    const opt = document.createElement('option');
-                    opt.value = title;
-                    opt.textContent = title;
-                    titleSelect.appendChild(opt);
-                });
-            }
-
-            // Skills
-            const skillSelect = document.getElementById('skills-select');
-            if (window.INITIAL_EMPLOYEES_DATA) {
-                window.INITIAL_EMPLOYEES_DATA.forEach(emp => {
-                    const opt = document.createElement('option');
-                    opt.value = emp.skills;
-                    let shortSkill = emp.skills.substring(0, 20) + (emp.skills.length > 20 ? '...' : '');
-                    if (!shortSkill) shortSkill = "(空白)";
-                    opt.textContent = `${emp.name} 的專長組合: ${shortSkill}`;
-                    skillSelect.appendChild(opt);
-                });
-            }
-        }
-
-        // --- Start App ---
-        initFirebase();
-        
-        // ** FIX 1: Explicitly call initSelectOptions at the end of module execution **
-        initSelectOptions();
-        
-        // ** FIX 3: Explicitly call createIcons for static elements on startup **
-        lucide.createIcons();
-
-        // --- Tab Switching Logic (Legacy) ---
+        // --- Tabs & Word ---
         window.switchTab = (tabId) => {
             ['edit', 'projects', 'preview'].forEach(id => {
                 document.getElementById(`${id}-section`).classList.add('hidden');
@@ -870,7 +778,6 @@
             if (tabId === 'preview') renderPreview();
         };
 
-        // --- Preview Logic ---
         window.renderPreview = () => {
              const warningEl = document.getElementById('preview-warning');
              const contentEl = document.getElementById('preview-content-container');
@@ -880,7 +787,6 @@
                 contentEl.classList.add('hidden');
                 return;
             }
-            
             warningEl.classList.add('hidden');
             contentEl.classList.remove('hidden');
 
@@ -901,10 +807,7 @@
             container.innerHTML = '';
             
             const selectedIds = emp.selectedProjectIds || [];
-            // FIX 2: Sort selected projects by Date Descending
-            const selectedProjects = projects
-                                    .filter(p => selectedIds.includes(p.id))
-                                    .sort(sortProjectsByDate);
+            const selectedProjects = projects.filter(p => selectedIds.includes(p.id));
 
             if (selectedProjects.length === 0) {
                 container.innerHTML = '<div class="p-8 text-center font-serif text-gray-400 border-b border-black">(尚無參與專案資料)</div>';
@@ -922,14 +825,11 @@
             }
         };
 
-         window.downloadWord = () => {
+        window.downloadWord = () => {
             if (!currentEmpId) { alert("請先選擇人員"); return; }
             const emp = employees.find(e => e.id === currentEmpId);
             const selectedIds = emp.selectedProjectIds || [];
-            // FIX 2: Sort selected projects by Date Descending
-            const selectedProjects = projects
-                                    .filter(p => selectedIds.includes(p.id))
-                                    .sort(sortProjectsByDate);
+            const selectedProjects = projects.filter(p => selectedIds.includes(p.id));
 
             let projectsRows = '';
             if (selectedProjects.length === 0) {
@@ -985,6 +885,9 @@
             document.body.removeChild(link);
             URL.revokeObjectURL(href);
         };
+
+        // Start App
+        initApp();
     </script>
 </body>
 </html>
